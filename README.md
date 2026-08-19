@@ -7,7 +7,8 @@ Scaffolded from GenLayer's official [project boilerplate](https://github.com/gen
 
 ## What's included
 - `contracts/dispute_arbitration.py` — the arbitration contract (this project's flagship)
-- `contracts/sla_bounty.py` and `contracts/fact_checker.py` — two smaller companion Intelligent Contracts exploring the same web-access + LLM-judgment pattern for different use cases
+- `contracts/sla_bounty.py` — plain-English uptime monitoring: an LLM judges whether a live page actually matches the owner's stated expectation, not just its status code
+- `contracts/fact_checker.py` — corroboration-based claim verification: requires 2+ independently-checked sources to agree before a claim is firmly verified or refuted, and stays open to challenge (anyone can add a contradicting source, re-opening a corroborated claim as disputed)
 - **Direct mode tests** — fast, in-memory unit tests with web/LLM mocking (~ms per test), covering all three contracts
 - **Integration tests** — full end-to-end tests against GenLayer Studio
 - **Contract linting** — static analysis to catch common contract issues before deployment

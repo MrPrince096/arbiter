@@ -1,73 +1,132 @@
-"""Direct-mode tests for fact_checker.py."""
+"""Direct-mode tests for fact_checker.py — corroboration-based verification."""
 
 from tests.direct.conftest import to_hex
 
 
-def _setup_verdict_mocks(vm, verdict, reasoning, body="Page confirms the event took place in 2024."):
-    vm.mock_web(r".*source\.example.*", {"status": 200, "body": body})
+def mock_source(vm, url_pattern, verdict, reasoning, body="Page content."):
+    vm.mock_web(url_pattern, {"status": 200, "body": body})
     vm.mock_llm(
-        r".*Fact-check the following claim.*",
+        r"(?s).*Fact-check the following claim.*" + url_pattern,
         f'{{"verdict": "{verdict}", "reasoning": "{reasoning}"}}',
     )
 
 
-def test_submit_true_claim(direct_vm, direct_deploy, direct_alice):
+def test_single_source_stays_pending(direct_vm, direct_deploy, direct_alice):
+    """One source alone isn't enough to firmly resolve a claim."""
     contract = direct_deploy("contracts/fact_checker.py")
     direct_vm.sender = direct_alice
 
-    _setup_verdict_mocks(direct_vm, "true", "Source directly confirms the claim's date.")
-    contract.submit_claim("c1", "The event happened in 2024.", "https://source.example/article")
+    mock_source(direct_vm, r".*source-a\.example.*", "true", "Source A confirms it.")
+    contract.submit_claim("c1", "The event happened in 2024.", "https://source-a.example/article")
 
     claim = contract.get_claim("c1")
-    assert claim["verdict"] == "true"
-    assert claim["submitter"] == to_hex(direct_alice)
-    assert claim["reasoning"] == "Source directly confirms the claim's date."
+    assert claim["status"] == "pending"
+    assert len(claim["sources"]) == 1
 
 
-def test_submit_false_claim(direct_vm, direct_deploy, direct_alice):
+def test_two_agreeing_sources_corroborates(direct_vm, direct_deploy, direct_alice):
     contract = direct_deploy("contracts/fact_checker.py")
     direct_vm.sender = direct_alice
 
-    _setup_verdict_mocks(
-        direct_vm, "false", "Source states the event happened in 2023, not 2024.",
-        body="The event took place in 2023.",
-    )
-    contract.submit_claim("c1", "The event happened in 2024.", "https://source.example/article")
+    mock_source(direct_vm, r".*source-a\.example.*", "true", "Source A confirms it.")
+    contract.submit_claim("c1", "The event happened in 2024.", "https://source-a.example/article")
+
+    mock_source(direct_vm, r".*source-b\.example.*", "true", "Source B also confirms it.")
+    contract.add_source("c1", "https://source-b.example/article")
 
     claim = contract.get_claim("c1")
-    assert claim["verdict"] == "false"
+    assert claim["status"] == "corroborated"
+    assert len(claim["sources"]) == 2
 
 
-def test_submit_unverifiable_claim(direct_vm, direct_deploy, direct_alice):
+def test_two_agreeing_false_sources_refutes(direct_vm, direct_deploy, direct_alice):
     contract = direct_deploy("contracts/fact_checker.py")
     direct_vm.sender = direct_alice
 
-    _setup_verdict_mocks(
-        direct_vm, "unverifiable", "Source doesn't mention this at all.",
-        body="Unrelated page content.",
-    )
-    contract.submit_claim("c1", "The event happened in 2024.", "https://source.example/article")
+    mock_source(direct_vm, r".*source-a\.example.*", "false", "Source A contradicts it.")
+    contract.submit_claim("c1", "The event happened in 2024.", "https://source-a.example/article")
+
+    mock_source(direct_vm, r".*source-b\.example.*", "false", "Source B also contradicts it.")
+    contract.add_source("c1", "https://source-b.example/article")
 
     claim = contract.get_claim("c1")
-    assert claim["verdict"] == "unverifiable"
+    assert claim["status"] == "refuted"
+
+
+def test_disagreeing_sources_dispute(direct_vm, direct_deploy, direct_alice):
+    contract = direct_deploy("contracts/fact_checker.py")
+    direct_vm.sender = direct_alice
+
+    mock_source(direct_vm, r".*source-a\.example.*", "true", "Source A confirms it.")
+    contract.submit_claim("c1", "The event happened in 2024.", "https://source-a.example/article")
+
+    mock_source(direct_vm, r".*source-b\.example.*", "false", "Source B contradicts it.")
+    contract.add_source("c1", "https://source-b.example/article")
+
+    claim = contract.get_claim("c1")
+    assert claim["status"] == "disputed"
+
+
+def test_challenge_flips_corroborated_claim_to_disputed(direct_vm, direct_deploy, direct_alice, direct_bob):
+    """The core challenge mechanic: a wrongly-corroborated claim can be re-opened by anyone."""
+    contract = direct_deploy("contracts/fact_checker.py")
+    direct_vm.sender = direct_alice
+
+    mock_source(direct_vm, r".*source-a\.example.*", "true", "Confirms it.")
+    contract.submit_claim("c1", "claim text", "https://source-a.example/article")
+    mock_source(direct_vm, r".*source-b\.example.*", "true", "Also confirms it.")
+    contract.add_source("c1", "https://source-b.example/article")
+    assert contract.get_claim("c1")["status"] == "corroborated"
+
+    # Bob challenges with a contradicting source.
+    direct_vm.sender = direct_bob
+    mock_source(direct_vm, r".*source-c\.example.*", "false", "Actually contradicts it.")
+    contract.add_source("c1", "https://source-c.example/article")
+
+    claim = contract.get_claim("c1")
+    assert claim["status"] == "disputed"
+    assert len(claim["sources"]) == 3
+
+
+def test_duplicate_source_rejected(direct_vm, direct_deploy, direct_alice):
+    contract = direct_deploy("contracts/fact_checker.py")
+    direct_vm.sender = direct_alice
+    mock_source(direct_vm, r".*source-a\.example.*", "true", "Confirms it.")
+    contract.submit_claim("c1", "claim text", "https://source-a.example/article")
+
+    with direct_vm.expect_revert("That source has already been checked for this claim"):
+        contract.add_source("c1", "https://source-a.example/article")
 
 
 def test_duplicate_claim_id_fails(direct_vm, direct_deploy, direct_alice):
     contract = direct_deploy("contracts/fact_checker.py")
     direct_vm.sender = direct_alice
-    _setup_verdict_mocks(direct_vm, "true", "confirmed")
-    contract.submit_claim("c1", "claim text", "https://source.example/article")
+    mock_source(direct_vm, r".*source-a\.example.*", "true", "confirmed")
+    contract.submit_claim("c1", "claim text", "https://source-a.example/article")
 
     with direct_vm.expect_revert("Claim id already exists"):
-        contract.submit_claim("c1", "claim text", "https://source.example/article")
+        contract.submit_claim("c1", "claim text", "https://source-a.example/article")
 
 
 def test_list_claims(direct_vm, direct_deploy, direct_alice):
     contract = direct_deploy("contracts/fact_checker.py")
     direct_vm.sender = direct_alice
-    _setup_verdict_mocks(direct_vm, "true", "confirmed")
-    contract.submit_claim("c1", "claim one", "https://source.example/a")
-    contract.submit_claim("c2", "claim two", "https://source.example/b")
+    mock_source(direct_vm, r".*source-a\.example.*", "true", "confirmed")
+    contract.submit_claim("c1", "claim one", "https://source-a.example/a")
+    mock_source(direct_vm, r".*source-b\.example.*", "true", "confirmed")
+    contract.submit_claim("c2", "claim two", "https://source-b.example/b")
 
     listing = contract.list_claims()
-    assert listing == {"c1": "true", "c2": "true"}
+    assert listing == {"c1": "pending", "c2": "pending"}
+
+
+def test_submitter_recorded(direct_vm, direct_deploy, direct_alice):
+    contract = direct_deploy("contracts/fact_checker.py")
+    direct_vm.sender = direct_alice
+    mock_source(direct_vm, r".*source-a\.example.*", "true", "confirmed")
+    contract.submit_claim("c1", "claim text", "https://source-a.example/article")
+
+    claim = contract.get_claim("c1")
+    assert claim["submitter"] == to_hex(direct_alice)
+
+

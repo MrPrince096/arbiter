@@ -24,3 +24,5 @@ frontend/tsconfig.tsbuildinfo
 *.compiled.js
 package-lock.json
 
+.deploy-keystore-password.txt
+/.github/
