@@ -1,20 +1,18 @@
-# Sample GenLayer project
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/license/mit/)
-[![Discord](https://img.shields.io/badge/Discord-Join%20us-5865F2?logo=discord&logoColor=white)](https://discord.gg/8Jm4v89VAu)
-[![Telegram](https://img.shields.io/badge/Telegram--T.svg?style=social&logo=telegram)](https://t.me/genlayer)
-[![Twitter](https://img.shields.io/twitter/url/https/twitter.com/yeagerai.svg?style=social&label=Follow%20%40GenLayer)](https://x.com/GenLayer)
-[![GitHub star chart](https://img.shields.io/github/stars/yeagerai/genlayer-project-boilerplate?style=social)](https://star-history.com/#yeagerai/genlayer-js)
+# Arbiter — On-Chain Dispute Arbitration on GenLayer
 
 ## About
-This project includes the boilerplate code for a GenLayer use case implementation, specifically a football bets game.
+Two parties record an agreement in plain English. Either side can raise a dispute with evidence — free text and/or a URL. Validators fetch that evidence and an LLM judges who the terms favor, reaching a binding verdict through GenLayer's consensus (`eq_principle`) rather than any single node's opinion.
+
+Scaffolded from GenLayer's official [project boilerplate](https://github.com/genlayerlabs/genlayer-project-boilerplate) (its own example, `contracts/football_bets.py`, is left in place as a reference for the same `gl.nondet.web.render` + `gl.nondet.exec_prompt` + `eq_principle.strict_eq` pattern this project builds on).
 
 ## What's included
-- An example intelligent contract (Football Bets) with web access and LLM integration
-- **Direct mode tests** — fast, in-memory unit tests with web/LLM mocking (~ms per test)
+- `contracts/dispute_arbitration.py` — the arbitration contract (this project's flagship)
+- `contracts/sla_bounty.py` and `contracts/fact_checker.py` — two smaller companion Intelligent Contracts exploring the same web-access + LLM-judgment pattern for different use cases
+- **Direct mode tests** — fast, in-memory unit tests with web/LLM mocking (~ms per test), covering all three contracts
 - **Integration tests** — full end-to-end tests against GenLayer Studio
 - **Contract linting** — static analysis to catch common contract issues before deployment
 - **CI pipeline** — GitHub Actions workflow for linting and direct tests
-- A production-ready Next.js 15 frontend with TypeScript, TanStack Query, and Radix UI
+- A production-ready Next.js frontend (TypeScript, TanStack Query, Radix UI) for `dispute_arbitration.py`
 - Configuration file template and deployment scripts
 
 ## Requirements
@@ -111,11 +109,11 @@ npm run dev
 
 The app will be available at http://localhost:3000/.
 
-## How the Football Bets Contract Works
+## How the Dispute Arbitration Contract Works
 
-1. **Creating Bets**: Users bet on a football match by providing the game date, teams, and predicted winner.
-2. **Resolving Bets**: After the match, the contract fetches results from BBC Sport, uses an LLM to extract the score, and validates via the equivalence principle.
-3. **Points**: Correct predictions earn points. Users can query their points or the leaderboard.
+1. **Creating an Agreement**: Either party records the terms, the counterparty's address, and the amount at stake.
+2. **Raising a Dispute**: Either party can dispute an open agreement, submitting evidence (free text and/or a URL).
+3. **Resolving**: The contract fetches any evidence URL, asks an LLM to judge who the terms favor, and records the verdict + reasoning — reached via `eq_principle.strict_eq` so all validators converge on the same answer.
 
 ## Testing Strategy
 

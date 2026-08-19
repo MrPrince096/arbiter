@@ -1,23 +1,18 @@
 /**
- * TypeScript types for GenLayer Football Betting contract
+ * TypeScript types for the GenLayer Dispute Arbitration contract
  */
 
-export interface Bet {
+export interface Agreement {
   id: string;
-  game_date: string;
-  team1: string;
-  team2: string;
-  predicted_winner: string;
-  has_resolved: boolean;
-  real_winner?: string;
-  real_score?: string;
-  resolution_url?: string;
-  owner: string;
-}
-
-export interface LeaderboardEntry {
-  address: string;
-  points: number;
+  party_a: string;
+  party_b: string;
+  terms: string;
+  amount: string;
+  status: "open" | "disputed" | "resolved";
+  evidence?: string;
+  evidence_url?: string;
+  verdict_winner?: "party_a" | "party_b" | "";
+  verdict_reasoning?: string;
 }
 
 export interface TransactionReceipt {
@@ -25,9 +20,4 @@ export interface TransactionReceipt {
   hash: string;
   blockNumber?: number;
   [key: string]: any;
-}
-
-export interface BetFilters {
-  resolved?: boolean;
-  owner?: string;
 }

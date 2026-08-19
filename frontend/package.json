@@ -1,7 +1,7 @@
 {
-  "name": "genlayer-football-betting",
+  "name": "genlayer-arbiter",
   "version": "1.0.0",
-  "description": "GenLayer Football Betting - AI-powered prediction betting on GenLayer blockchain.",
+  "description": "Arbiter - on-chain dispute arbitration on GenLayer, judged by validator consensus.",
   "main": "index.js",
   "scripts": {
     "dev": "next dev",
